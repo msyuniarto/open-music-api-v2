@@ -2,6 +2,7 @@ const { nanoid } = require('nanoid');
 const { Pool } = require('pg');
 const InvariantError = require('../../exceptions/InvariantError');
 const NotFoundError = require('../../exceptions/NotFoundError');
+const AuthorizationError = require('../../exceptions/AuthorizationError');
 const { mapDBToModelSong } = require('../../utils');
 
 class SongsService {
@@ -99,6 +100,42 @@ class SongsService {
 
     if (!result.rows.length) {
       throw new NotFoundError('Lagu gagal dihapus. Id tidak ditemukan');
+    }
+  }
+
+  async verifySongOwner(id, owner) {
+    const query = {
+      text: 'SELECT * FROM songs WHERE id = $1',
+      values: [id],
+    };
+    const result = await this._pool.query(query);
+
+    if (!result.rows.length) {
+      throw new NotFoundError('Lagu tidak ditemukan');
+    }
+
+    const note = result.rows[0];
+
+    if (note.owner !== owner) {
+      throw new AuthorizationError('Anda tidak berhak mengakses resource ini');
+    }
+  }
+
+  async verifySongAccess(noteId, userId) {
+    try {
+      // verifikasi owner
+      await this.verifySongOwner(noteId, userId);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+
+      // jika gagal verifikasi owner, lanjut verifikasi kolaborator
+      // try {
+      //   await this._collaborationService.verifyCollaborator(noteId, userId);
+      // } catch {
+      //   throw error;
+      // }
     }
   }
 }
